@@ -1,6 +1,8 @@
 """
 Adaptations: create, list, get, trigger processing.
 """
+import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -14,6 +16,7 @@ from backend.models.master import MasterResume
 from backend.models.adaptation import Adaptation
 from backend.services.adapter import run_adaptation
 from backend.services.docx_builder import build_adapted_docx
+from backend.services import storage
 
 router   = APIRouter()
 settings = get_settings()
@@ -53,7 +56,6 @@ class AdaptationDetail(AdaptationSummary):
 
 async def _run_adaptation_task(adaptation_id: str):
     from backend.database import SessionLocal
-    import os
 
     db = SessionLocal()
     try:
@@ -71,7 +73,6 @@ async def _run_adaptation_task(adaptation_id: str):
         adaptation.status = "processing"
         db.commit()
 
-        # Run the LLM pipeline
         result = await run_adaptation(
             master_sections=master.sections or {},
             master_full_text=master.full_text or "",
@@ -84,39 +85,57 @@ async def _run_adaptation_task(adaptation_id: str):
         adaptation.job_analysis   = result["job_analysis"]
         adaptation.blocks_changed = result["blocks_changed"]
 
-        # Auto-detect title and company from analysis
         analysis = result["job_analysis"]
         if not adaptation.job_title:
             adaptation.job_title = analysis.get("job_title", "")
         if not adaptation.company_name:
             adaptation.company_name = analysis.get("company_name", "")
 
-        # Build adapted docx (only if master is a docx)
+        # Build adapted DOCX (only if master is a DOCX)
         if master.file_type == "docx":
-            os.makedirs(settings.output_dir, exist_ok=True)
             safe_company = (adaptation.company_name or "company").replace(" ", "_")[:20]
             safe_title   = (adaptation.job_title or "role").replace(" ", "_")[:20]
             output_name  = f"resume_{safe_title}_{safe_company}_{adaptation.id[:8]}.docx"
-            output_path  = os.path.join(settings.output_dir, output_name)
 
-            build_adapted_docx(
-                master_path=master.file_path,
-                master_sections=master.sections or {},
-                blocks_changed=result["blocks_changed"],
-                output_path=output_path,
+            # Download master to a temp file (no-op if already local)
+            master_tmp = storage.download_to_temp(master.file_path, suffix=".docx")
+            output_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx").name
+            try:
+                build_adapted_docx(
+                    master_path=master_tmp,
+                    master_sections=master.sections or {},
+                    blocks_changed=result["blocks_changed"],
+                    output_path=output_tmp,
+                )
+                with open(output_tmp, "rb") as f:
+                    output_bytes = f.read()
+            finally:
+                # Clean up temp files created for remote storage
+                if storage.is_remote() and os.path.exists(master_tmp):
+                    os.remove(master_tmp)
+                if os.path.exists(output_tmp):
+                    os.remove(output_tmp)
+
+            storage_path = f"outputs/{output_name}"
+            saved_path = storage.upload_file(
+                output_bytes, storage_path,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
-            adaptation.output_path = output_path
+            adaptation.output_path = saved_path
 
         adaptation.status = "done"
         db.commit()
 
     except Exception as exc:
-        db = SessionLocal()
-        adaptation = db.query(Adaptation).filter(Adaptation.id == adaptation_id).first()
-        if adaptation:
-            adaptation.status    = "error"
-            adaptation.error_msg = str(exc)
-            db.commit()
+        # Use the same session — avoids losing the exception context
+        try:
+            adaptation = db.query(Adaptation).filter(Adaptation.id == adaptation_id).first()
+            if adaptation:
+                adaptation.status    = "error"
+                adaptation.error_msg = str(exc)
+                db.commit()
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -174,8 +193,8 @@ def delete_adaptation(adaptation_id: str, db: Session = Depends(get_db)):
     a = db.query(Adaptation).filter(Adaptation.id == adaptation_id).first()
     if not a:
         raise HTTPException(404, "Adaptation not found")
-    if a.output_path and os.path.exists(a.output_path):
-        os.remove(a.output_path)
+    if a.output_path:
+        storage.delete_file(a.output_path)
     db.delete(a)
     db.commit()
 

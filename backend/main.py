@@ -1,4 +1,3 @@
-import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,8 +11,11 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    os.makedirs(settings.output_dir, exist_ok=True)
+    from backend.services.storage import is_remote
+    if not is_remote():
+        import os
+        os.makedirs(settings.upload_dir, exist_ok=True)
+        os.makedirs(settings.output_dir, exist_ok=True)
     init_db()
     yield
 
@@ -25,9 +27,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

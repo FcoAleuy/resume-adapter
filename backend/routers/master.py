@@ -2,6 +2,8 @@
 Master resume endpoints: upload, get, list versions.
 Only one master is 'active' at a time.
 """
+import uuid
+import tempfile
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -14,6 +16,7 @@ from backend.config import get_settings
 from backend.database import get_db
 from backend.models.master import MasterResume
 from backend.services.resume_parser import parse_docx, parse_pdf
+from backend.services import storage
 
 router   = APIRouter()
 settings = get_settings()
@@ -82,23 +85,32 @@ async def upload_master(
     if len(contents) > MAX_BYTES:
         raise HTTPException(413, f"Archivo demasiado grande (máx {settings.max_upload_mb} MB)")
 
-    # Save file
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    master_id = __import__("uuid").uuid4().hex
+    master_id = uuid.uuid4().hex
     safe_name = f"master_{master_id}.{file_type}"
-    file_path = os.path.join(settings.upload_dir, safe_name)
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    storage_path = f"uploads/{safe_name}"
 
-    # Parse resume
+    # Parse requires a real file path — write to temp, then persist to storage
+    tmp_path = None
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type}") as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+
         if file_type == "docx":
-            parsed = parse_docx(file_path)
+            parsed = parse_docx(tmp_path)
         else:
-            parsed = parse_pdf(file_path)
+            parsed = parse_pdf(tmp_path)
     except Exception as e:
-        os.remove(file_path)
         raise HTTPException(422, f"No se pudo leer el archivo: {e}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    content_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if file_type == "docx" else "application/pdf"
+    )
+    file_path = storage.upload_file(contents, storage_path, content_type)
 
     # Deactivate previous masters
     db.query(MasterResume).filter(MasterResume.is_active == True).update({"is_active": False})
@@ -137,8 +149,8 @@ def delete_master(master_id: str, db: Session = Depends(get_db)):
     master = db.query(MasterResume).filter(MasterResume.id == master_id).first()
     if not master:
         raise HTTPException(404, "Master not found")
-    if master.file_path and os.path.exists(master.file_path):
-        os.remove(master.file_path)
+    if master.file_path:
+        storage.delete_file(master.file_path)
     db.delete(master)
     db.commit()
 

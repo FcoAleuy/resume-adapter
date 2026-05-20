@@ -4,7 +4,10 @@ from backend.config import get_settings
 
 settings = get_settings()
 
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
+_url = settings.database_url
+# SQLite requires check_same_thread=False; PostgreSQL does not accept that arg
+_connect_args = {"check_same_thread": False} if _url.startswith("sqlite") else {}
+engine = create_engine(_url, connect_args=_connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

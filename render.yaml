@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: resume-adapter-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false   # set in Render dashboard → Supabase PostgreSQL URL
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: resumes
+      - key: ALLOWED_ORIGINS
+        sync: false   # set to your Vercel URL, e.g. https://resume-adapter.vercel.app
