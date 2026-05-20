@@ -1,6 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
 from backend.database import init_db
@@ -44,3 +46,9 @@ app.include_router(export.router,       prefix="/api/export",       tags=["expor
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Serve Next.js static export — must be mounted last so API routes take priority
+_static_dir = os.path.join(os.path.dirname(__file__), "..", "frontend", "out")
+if os.path.exists(_static_dir):
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="frontend")

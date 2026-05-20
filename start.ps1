@@ -15,22 +15,7 @@ try {
     Write-Host " OK ($pyVer)" -ForegroundColor Green
 } catch {
     Write-Host " NO ENCONTRADO" -ForegroundColor Red
-    Write-Host ""
     Write-Host "  Instala Python 3.11+ desde: https://python.org/downloads" -ForegroundColor Yellow
-    Write-Host "  Marca 'Add Python to PATH' al instalar." -ForegroundColor Yellow
-    Read-Host "`n  Presiona Enter para cerrar"
-    exit 1
-}
-
-# ── Verificar Node.js ─────────────────────────────────────────────────────────
-Write-Host "  Verificando Node.js..." -NoNewline
-try {
-    $nodeVer = node --version 2>&1
-    Write-Host " OK ($nodeVer)" -ForegroundColor Green
-} catch {
-    Write-Host " NO ENCONTRADO" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  Instala Node.js LTS desde: https://nodejs.org" -ForegroundColor Yellow
     Read-Host "`n  Presiona Enter para cerrar"
     exit 1
 }
@@ -44,12 +29,6 @@ if (-not (Test-Path ".env")) {
 }
 Write-Host "  .env encontrado" -ForegroundColor Green
 
-# ── Frontend .env.local ───────────────────────────────────────────────────────
-if (-not (Test-Path "frontend\.env.local")) {
-    "NEXT_PUBLIC_API_URL=http://localhost:8000" | Out-File "frontend\.env.local" -Encoding ascii
-    Write-Host "  frontend\.env.local creado" -ForegroundColor Green
-}
-
 # ── Entorno virtual Python ────────────────────────────────────────────────────
 Write-Host ""
 if (-not (Test-Path "venv\Scripts\python.exe")) {
@@ -61,54 +40,62 @@ if (-not (Test-Path "venv\Scripts\python.exe")) {
         exit 1
     }
 
-    Write-Host "  [SETUP] Instalando dependencias backend (1-2 min)..." -ForegroundColor Yellow
+    Write-Host "  [SETUP] Instalando dependencias (1-2 min)..." -ForegroundColor Yellow
     & venv\Scripts\pip.exe install -r backend\requirements.local.txt -q --disable-pip-version-check
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [ERROR] Fallo pip install. Revisa tu conexion a internet." -ForegroundColor Red
+        Write-Host "  [ERROR] Fallo pip install." -ForegroundColor Red
         Read-Host "`n  Presiona Enter para cerrar"
         exit 1
     }
-    Write-Host "  Dependencias backend instaladas" -ForegroundColor Green
+    Write-Host "  Dependencias Python instaladas" -ForegroundColor Green
 } else {
     Write-Host "  Entorno virtual Python listo" -ForegroundColor Green
 }
 
-# ── Node modules ──────────────────────────────────────────────────────────────
-if (-not (Test-Path "frontend\node_modules\next")) {
+# ── Compilar frontend (solo si no existe o es primera vez) ────────────────────
+if (-not (Test-Path "frontend\out\index.html")) {
     Write-Host ""
-    Write-Host "  [SETUP] Instalando dependencias frontend (1-2 min)..." -ForegroundColor Yellow
+    Write-Host "  [SETUP] Compilando frontend (primera vez, 1-2 min)..." -ForegroundColor Yellow
+
+    # Necesitamos Node.js solo para compilar
+    node --version >$null 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [ERROR] Node.js necesario para compilar el frontend." -ForegroundColor Red
+        Write-Host "          Instala Node.js LTS desde: https://nodejs.org" -ForegroundColor Yellow
+        Read-Host "`n  Presiona Enter para cerrar"
+        exit 1
+    }
+
     Push-Location frontend
-    npm install --silent
+    if (-not (Test-Path "node_modules\next")) {
+        Write-Host "  [SETUP] Instalando dependencias Node..." -ForegroundColor Yellow
+        npm install --silent
+    }
+    npm run build
     if ($LASTEXITCODE -ne 0) {
         Pop-Location
-        Write-Host "  [ERROR] Fallo npm install." -ForegroundColor Red
+        Write-Host "  [ERROR] Fallo la compilacion del frontend." -ForegroundColor Red
         Read-Host "`n  Presiona Enter para cerrar"
         exit 1
     }
     Pop-Location
-    Write-Host "  Dependencias frontend instaladas" -ForegroundColor Green
+    Write-Host "  Frontend compilado" -ForegroundColor Green
 } else {
-    Write-Host "  Node modules listos" -ForegroundColor Green
+    Write-Host "  Frontend listo (compilado)" -ForegroundColor Green
 }
 
-# ── Iniciar Backend ───────────────────────────────────────────────────────────
+# ── Iniciar backend (sirve API + frontend estatico) ───────────────────────────
 Write-Host ""
-Write-Host "  Iniciando servidores..." -ForegroundColor Cyan
-Write-Host ""
+Write-Host "  Iniciando servidor..." -ForegroundColor Cyan
 
-$backendCmd = "Set-Location '$Root'; .\venv\Scripts\Activate.ps1; uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Minimized
+$serverCmd = "Set-Location '$Root'; .\venv\Scripts\Activate.ps1; uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+$proc = Start-Process powershell -ArgumentList "-NoExit", "-Command", $serverCmd -WindowStyle Minimized -PassThru
 
+Write-Host "  Esperando que el servidor levante..." -ForegroundColor Gray
 Start-Sleep -Seconds 4
 
-# ── Iniciar Frontend ──────────────────────────────────────────────────────────
-$frontendCmd = "Set-Location '$Root\frontend'; npm run dev"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd -WindowStyle Minimized
-
-Start-Sleep -Seconds 7
-
 # ── Abrir navegador ───────────────────────────────────────────────────────────
-Start-Process "http://localhost:3000"
+Start-Process "http://localhost:8000"
 
 # ── Panel de control ─────────────────────────────────────────────────────────
 Clear-Host
@@ -117,21 +104,19 @@ Write-Host "  ================================================" -ForegroundColor
 Write-Host "   Resume Adapter esta corriendo!" -ForegroundColor Green
 Write-Host "  ================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "   App :  http://localhost:3000" -ForegroundColor White
-Write-Host "   API :  http://localhost:8000/docs" -ForegroundColor White
-Write-Host ""
-Write-Host "   (Logs en las 2 ventanas minimizadas)" -ForegroundColor Gray
+Write-Host "   Abre:  http://localhost:8000" -ForegroundColor White
+Write-Host "   API:   http://localhost:8000/docs" -ForegroundColor White
 Write-Host ""
 Write-Host "  ------------------------------------------------" -ForegroundColor DarkGray
-Write-Host "   Presiona Enter para DETENER todo" -ForegroundColor Yellow
+Write-Host "   Presiona Enter para DETENER" -ForegroundColor Yellow
 Write-Host "  ------------------------------------------------" -ForegroundColor DarkGray
 Write-Host ""
 Read-Host "  Enter"
 
-# ── Detener servidores ────────────────────────────────────────────────────────
+# ── Detener ───────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "  Deteniendo servidores..." -ForegroundColor Yellow
+Write-Host "  Deteniendo servidor..." -ForegroundColor Yellow
+Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 Get-Process -Name "uvicorn" -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-Process -Name "node" -ErrorAction SilentlyContinue | Stop-Process -Force
 Write-Host "  Listo. Hasta luego!" -ForegroundColor Green
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 1
