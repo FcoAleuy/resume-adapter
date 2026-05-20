@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # AI providers
     openai_api_key: str = ""
     groq_api_key: str = ""
+    gemini_api_key: str = ""
 
     # LLM defaults
     default_llm_provider: str = "openai"

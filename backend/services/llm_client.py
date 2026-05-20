@@ -1,10 +1,27 @@
 """
-Unified LLM client with retry. Supports OpenAI and Groq (OpenAI-compatible).
+Unified LLM client with retry.
+Supports OpenAI, Groq, and Gemini (all via OpenAI-compatible endpoints).
 """
 import asyncio
 from backend.config import get_settings
 
 settings = get_settings()
+
+# Provider routing table
+_PROVIDERS: dict[str, dict] = {
+    "openai": {
+        "base_url": None,  # default OpenAI endpoint
+        "key_attr": "openai_api_key",
+    },
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_attr": "groq_api_key",
+    },
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "key_attr": "gemini_api_key",
+    },
+}
 
 
 async def call_llm(
@@ -29,14 +46,15 @@ async def call_llm(
 async def _call_once(provider, model, system, user, json_mode, temperature) -> str:
     from openai import AsyncOpenAI
 
-    base_url = None
-    api_key  = settings.openai_api_key
+    cfg = _PROVIDERS.get(provider)
+    if cfg is None:
+        raise ValueError(f"Unknown provider '{provider}'. Valid: {list(_PROVIDERS)}")
 
-    if provider == "groq":
-        base_url = "https://api.groq.com/openai/v1"
-        api_key  = settings.groq_api_key
+    api_key = getattr(settings, cfg["key_attr"], "") or ""
+    if not api_key:
+        raise ValueError(f"API key for provider '{provider}' is not configured.")
 
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+    client = AsyncOpenAI(api_key=api_key, base_url=cfg["base_url"])
     kwargs: dict = dict(
         model=model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
