@@ -1,0 +1,6 @@
+# Force Windows line endings for batch files on all platforms
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Normalize everything else to LF
+*       text=auto
