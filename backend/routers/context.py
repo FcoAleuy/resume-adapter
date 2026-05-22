@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models.context import UserContext
-from backend.services.resume_parser import parse_resume
+from backend.services.resume_parser import parse_docx, parse_pdf
 
 router = APIRouter()
 
@@ -66,13 +66,20 @@ async def add_file_context(
     if ext not in (".pdf", ".docx", ".txt"):
         raise HTTPException(400, "Solo se aceptan .pdf, .docx o .txt")
 
+    if ext == ".txt":
+        ctx = UserContext(title=title.strip() or filename, content=contents.decode("utf-8", errors="replace").strip())
+        db.add(ctx)
+        db.commit()
+        db.refresh(ctx)
+        return ctx
+
     # Write to temp file and parse
     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
         tmp.write(contents)
         tmp_path = tmp.name
 
     try:
-        parsed = parse_resume(tmp_path)
+        parsed = parse_pdf(tmp_path) if ext == ".pdf" else parse_docx(tmp_path)
         text = parsed.get("full_text", "").strip()
     finally:
         os.remove(tmp_path)
