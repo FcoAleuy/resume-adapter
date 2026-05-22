@@ -3,9 +3,11 @@ import { useState } from "react";
 import { createAdaptation, type Adaptation } from "@/lib/api";
 
 const LLM_OPTIONS = [
-  { provider: "openai", model: "gpt-4o",       label: "GPT-4o (mejor calidad)" },
-  { provider: "openai", model: "gpt-4o-mini",  label: "GPT-4o Mini (más rápido)" },
-  { provider: "groq",   model: "llama3-70b-8192", label: "Llama 3 70B via Groq (gratuito)" },
+  { provider: "groq",      model: "llama3-70b-8192",    label: "Llama 3 70B · Groq",    tag: "gratis" },
+  { provider: "gemini",    model: "gemini-2.0-flash",   label: "Gemini 2.0 Flash · Google", tag: "gratis" },
+  { provider: "anthropic", model: "claude-haiku-4-5",   label: "Claude Haiku · Anthropic", tag: "" },
+  { provider: "openai",    model: "gpt-4o-mini",        label: "GPT-4o Mini · OpenAI",  tag: "créditos" },
+  { provider: "openai",    model: "gpt-4o",             label: "GPT-4o · OpenAI",       tag: "créditos" },
 ];
 
 interface Props {
@@ -78,8 +80,17 @@ export function JobForm({ onCreated }: Props) {
                   : "border-gray-200 hover:border-gray-300 text-gray-600"
                 }`}
             >
-              <div className="font-medium">{opt.model}</div>
-              <div className="text-xs text-gray-400 mt-0.5">{opt.label}</div>
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-medium truncate">{opt.label}</span>
+                {opt.tag && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                    opt.tag === "gratis"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-orange-100 text-orange-700"
+                  }`}>{opt.tag}</span>
+                )}
+              </div>
+              <div className="text-xs text-gray-400 mt-0.5">{opt.model}</div>
             </button>
           ))}
         </div>
