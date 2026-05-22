@@ -104,37 +104,46 @@ async def _run_adaptation_task(adaptation_id: str):
         if not adaptation.company_name:
             adaptation.company_name = analysis.get("company_name", "")
 
-        # Build adapted DOCX (only if master is a DOCX)
-        if master.file_type == "docx":
-            safe_company = (adaptation.company_name or "company").replace(" ", "_")[:20]
-            safe_title   = (adaptation.job_title or "role").replace(" ", "_")[:20]
-            output_name  = f"resume_{safe_title}_{safe_company}_{adaptation.id[:8]}.docx"
+        # Build adapted DOCX
+        safe_company = (adaptation.company_name or "company").replace(" ", "_")[:20]
+        safe_title   = (adaptation.job_title or "role").replace(" ", "_")[:20]
+        output_name  = f"resume_{safe_title}_{safe_company}_{adaptation.id[:8]}.docx"
+        output_tmp   = tempfile.NamedTemporaryFile(delete=False, suffix=".docx").name
 
-            # Download master to a temp file (no-op if already local)
-            master_tmp = storage.download_to_temp(master.file_path, suffix=".docx")
-            output_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx").name
-            try:
-                build_adapted_docx(
-                    master_path=master_tmp,
-                    master_sections=master.sections or {},
+        try:
+            if master.file_type == "docx":
+                # Preserve original formatting — patch paragraphs in-place
+                master_tmp = storage.download_to_temp(master.file_path, suffix=".docx")
+                try:
+                    build_adapted_docx(
+                        master_path=master_tmp,
+                        master_sections=master.sections or {},
+                        blocks_changed=result["blocks_changed"],
+                        output_path=output_tmp,
+                    )
+                finally:
+                    if storage.is_remote() and os.path.exists(master_tmp):
+                        os.remove(master_tmp)
+            else:
+                # PDF master — build a plain DOCX from the adapted full text
+                _build_docx_from_text(
+                    master_full_text=master.full_text or "",
                     blocks_changed=result["blocks_changed"],
                     output_path=output_tmp,
                 )
-                with open(output_tmp, "rb") as f:
-                    output_bytes = f.read()
-            finally:
-                # Clean up temp files created for remote storage
-                if storage.is_remote() and os.path.exists(master_tmp):
-                    os.remove(master_tmp)
-                if os.path.exists(output_tmp):
-                    os.remove(output_tmp)
 
-            storage_path = f"outputs/{output_name}"
-            saved_path = storage.upload_file(
-                output_bytes, storage_path,
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            )
-            adaptation.output_path = saved_path
+            with open(output_tmp, "rb") as f:
+                output_bytes = f.read()
+        finally:
+            if os.path.exists(output_tmp):
+                os.remove(output_tmp)
+
+        storage_path = f"outputs/{output_name}"
+        saved_path = storage.upload_file(
+            output_bytes, storage_path,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        adaptation.output_path = saved_path
 
         adaptation.status = "done"
         db.commit()
@@ -234,3 +243,43 @@ def _to_detail(a: Adaptation) -> dict:
         "llm_model": a.llm_model,
         "error_msg": a.error_msg,
     }
+
+
+def _build_docx_from_text(master_full_text: str, blocks_changed: list, output_path: str) -> None:
+    """
+    Build a simple DOCX from the master full text (used when master is PDF).
+    Replaces each original section text with the adapted version, then writes
+    every line as a paragraph preserving the resume's logical structure.
+    """
+    from docx import Document
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    # Replace original text with adapted text in-order
+    adapted_text = master_full_text
+    for block in blocks_changed:
+        orig = (block.get("original") or "").strip()
+        adpt = (block.get("adapted") or "").strip()
+        if orig and adpt:
+            adapted_text = adapted_text.replace(orig, adpt, 1)
+
+    doc = Document()
+
+    # Remove default margins to give more room
+    for section in doc.sections:
+        section.top_margin    = section.top_margin.__class__(914400 // 2)   # 0.5 in
+        section.bottom_margin = section.bottom_margin.__class__(914400 // 2)
+        section.left_margin   = section.left_margin.__class__(914400)       # 1 in
+        section.right_margin  = section.right_margin.__class__(914400)
+
+    for line in adapted_text.split("\n"):
+        stripped = line.strip()
+        para = doc.add_paragraph()
+        run  = para.add_run(stripped)
+        run.font.size = Pt(11)
+        # Heuristic: short ALL-CAPS lines are likely section headers
+        if stripped.isupper() and 2 < len(stripped) < 60:
+            run.bold = True
+            run.font.size = Pt(12)
+
+    doc.save(output_path)
