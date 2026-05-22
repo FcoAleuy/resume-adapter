@@ -61,16 +61,22 @@ if (-not (Test-Path "frontend\out\index.html")) {
 # ── Arrancar servidor en segundo plano (sin ventana extra) ────────────────────
 Write-Host "  Arrancando servidor..." -ForegroundColor Cyan
 
+# Matar instancias anteriores
+Get-Process -Name "uvicorn" -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Milliseconds 500
+
 $uvicorn = "$Root\venv\Scripts\uvicorn.exe"
 $logFile = "$Root\server.log"
-"" | Out-File $logFile -Encoding utf8
+$errFile = "$Root\server_err.log"
+Remove-Item $logFile -ErrorAction SilentlyContinue
+Remove-Item $errFile -ErrorAction SilentlyContinue
 
 $proc = Start-Process -FilePath $uvicorn `
     -ArgumentList "backend.main:app", "--host", "127.0.0.1", "--port", "8000" `
     -WorkingDirectory $Root `
     -WindowStyle Hidden `
     -RedirectStandardOutput $logFile `
-    -RedirectStandardError  "$Root\server_err.log" `
+    -RedirectStandardError  $errFile `
     -PassThru
 
 # Esperar a que el servidor responda
@@ -87,8 +93,8 @@ if (-not $ready) {
     Write-Host ""
     Write-Host "  [ERROR] El servidor no arranco. Log de error:" -ForegroundColor Red
     Write-Host ""
-    if (Test-Path "$Root\server_err.log") {
-        Get-Content "$Root\server_err.log" | Select-Object -Last 20 | ForEach-Object {
+    if (Test-Path $errFile) {
+        Get-Content $errFile | Select-Object -Last 20 | ForEach-Object {
             Write-Host "    $_" -ForegroundColor Yellow
         }
     }
