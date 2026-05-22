@@ -16,7 +16,7 @@ from backend.services.llm_client import call_llm
 from backend.services.prompt_loader import load_prompt
 
 
-ADAPTABLE_SECTIONS = ["summary", "skills", "experience", "projects"]
+ADAPTABLE_SECTIONS = ["summary", "skills", "experience", "projects", "education"]
 
 SYSTEM_RULE = """REGLA MAESTRA: Usa siempre el resume tipo canadiense ya cargado como plantilla maestra.
 Adapta SOLO el contenido necesario para la oferta. Nunca alteres la estructura,
@@ -223,7 +223,11 @@ async def _adapt_section(
     model: str,
     system: str = SYSTEM_RULE,
 ) -> str:
-    prompt_name = f"adapt_{section_name}" if section_name in ("summary", "skills") else "adapt_experience"
+    prompt_name = (
+        f"adapt_{section_name}"
+        if section_name in ("summary", "skills", "education")
+        else "adapt_experience"
+    )
     prompt_template = load_prompt(prompt_name)
 
     prompt = prompt_template.format(

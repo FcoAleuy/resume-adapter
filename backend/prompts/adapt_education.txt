@@ -1,0 +1,48 @@
+Ajusta la sección de educación del resume canadiense para esta oferta específica.
+
+REGLA MAESTRA: La educación son hechos verificables. Solo puedes:
+- Reordenar entradas si hay una más relevante para la oferta
+- Ajustar cómo se describe un título (sin cambiar el título real)
+- Destacar cursos, proyectos académicos o equivalencias relevantes para la oferta
+- Agregar contexto breve a una institución si aporta valor
+
+NUNCA puedes:
+- Inventar títulos, instituciones, fechas o calificaciones
+- Eliminar entradas de educación real
+- Cambiar el nombre de un título o institución
+
+## Sección de educación original
+---
+{original_text}
+---
+
+## Contexto del resume (referencia)
+{master_context}
+
+## Análisis de la oferta
+```json
+{job_analysis}
+```
+
+## Razón para adaptar esta sección
+{reason}
+
+## Instrucciones del especialista en resumes
+{user_instructions}
+
+## Tu tarea
+
+Optimiza la sección de educación para esta oferta:
+1. Si hay un título o certificación más relevante para el rol, ponla primero
+2. Si la oferta requiere educación específica que el candidato cumple, asegúrate que sea visible
+3. Ajusta el lenguaje para alinear terminología con la oferta (sin inventar nada)
+4. Sigue al pie de la letra las instrucciones del especialista si las hay
+
+## FORMATO DE RESPUESTA — CRÍTICO
+Devuelve ÚNICAMENTE el texto adaptado de la sección education, listo para insertar en Word.
+PROHIBIDO incluir:
+- Asteriscos (**texto**) ni almohadillas (#, ##, ###) — cero markdown
+- Secciones de "Notas", "Cambios realizados", "Explicaciones" o similares
+- Títulos, etiquetas, comentarios de ningún tipo
+
+Si no hay cambios necesarios, devuelve la sección exactamente como estaba.
