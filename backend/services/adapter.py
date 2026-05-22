@@ -65,8 +65,8 @@ async def run_adaptation(
         master_sections=master_sections,
         job_analysis=job_analysis,
         user_instructions=user_instructions,
-        llm_provider=llm_provider,
-        llm_model=llm_model,
+        provider=llm_provider,
+        model=llm_model,
         system=system_with_context,
     )
 
@@ -85,8 +85,8 @@ async def run_adaptation(
             job_analysis=job_analysis,
             user_instructions=user_instructions,
             reason=block["reason"],
-            llm_provider=llm_provider,
-            llm_model=llm_model,
+            provider=llm_provider,
+            model=llm_model,
             system=system_with_context,
         )
 
