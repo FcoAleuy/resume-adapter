@@ -62,10 +62,15 @@ if (-not (Test-Path "frontend\out\index.html")) {
 Write-Host "  Arrancando servidor..." -ForegroundColor Cyan
 
 $uvicorn = "$Root\venv\Scripts\uvicorn.exe"
+$logFile = "$Root\server.log"
+"" | Out-File $logFile -Encoding utf8
+
 $proc = Start-Process -FilePath $uvicorn `
     -ArgumentList "backend.main:app", "--host", "127.0.0.1", "--port", "8000" `
     -WorkingDirectory $Root `
     -WindowStyle Hidden `
+    -RedirectStandardOutput $logFile `
+    -RedirectStandardError  "$Root\server_err.log" `
     -PassThru
 
 # Esperar a que el servidor responda
@@ -79,7 +84,14 @@ for ($i = 0; $i -lt 15; $i++) {
 }
 
 if (-not $ready) {
-    Write-Host "  [ERROR] El servidor no respondio. Revisa que el puerto 8000 este libre." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  [ERROR] El servidor no arranco. Log de error:" -ForegroundColor Red
+    Write-Host ""
+    if (Test-Path "$Root\server_err.log") {
+        Get-Content "$Root\server_err.log" | Select-Object -Last 20 | ForEach-Object {
+            Write-Host "    $_" -ForegroundColor Yellow
+        }
+    }
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
     Read-Host "`n  Enter para cerrar"
     exit 1
