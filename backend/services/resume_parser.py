@@ -20,14 +20,37 @@ from typing import Any
 
 # ── Section heading patterns (case-insensitive) ────────────────────────────────
 SECTION_PATTERNS = {
-    "summary": r"(summary|profile|professional profile|about me|objective|sobre m[ií]|perfil)",
-    "skills":  r"(skills|technical skills|core competencies|key skills|competencias|habilidades)",
-    "experience": r"(experience|work experience|professional experience|employment|experiencia)",
-    "education":  r"(education|academic|educaci[oó]n|formaci[oó]n)",
-    "projects":   r"(projects|key projects|selected projects|proyectos)",
-    "certifications": r"(certifications?|licenses?|credentials|cursos|certificaciones?)",
-    "languages":  r"(languages?|idiomas?)",
-    "volunteer":  r"(volunteer|volunteering|voluntariado)",
+    "summary": (
+        r"(summary|profile|professional\s+profile|professional\s+summary|"
+        r"career\s+profile|career\s+summary|about\s+me|objective|"
+        r"sobre\s+m[ií]|perfil|resumen)"
+    ),
+    "skills": (
+        r"(skills|technical\s+skills|core\s+competencies|key\s+skills|"
+        r"core\s+capabilities|areas\s+of\s+expertise|expertise|"
+        r"competencias|habilidades)"
+    ),
+    "experience": (
+        r"(experience|work\s+experience|professional\s+experience|"
+        r"work\s+history|job\s+history|employment\s+history|employment|"
+        r"career\s+history|professional\s+background|"
+        r"experiencia|historial\s+laboral|trayectoria)"
+    ),
+    "education": (
+        r"(education|academic|academic\s+background|"
+        r"educaci[oó]n|formaci[oó]n|estudios)"
+    ),
+    "projects": (
+        r"(projects|key\s+projects|selected\s+projects|notable\s+projects|"
+        r"proyectos)"
+    ),
+    "certifications": (
+        r"(certifications?|licenses?|credentials|"
+        r"professional\s+development|training|"
+        r"cursos|certificaciones?|formaci[oó]n\s+complementaria)"
+    ),
+    "languages": r"(languages?|idiomas?|language\s+skills)",
+    "volunteer":  r"(volunteer|volunteering|community|voluntariado)",
 }
 
 
@@ -128,6 +151,9 @@ def _build_section_map(paragraphs: list[dict]) -> dict[str, Any]:
             section_starts.append((matched, p["index"]))
 
     # Build sections: from one heading to the next
+    # If the same section key appears more than once (e.g. "Core Capabilities"
+    # and "Other Technical Skills & Tools" both match "skills"), merge them
+    # so no content is lost.
     sections: dict[str, dict] = {}
     for i, (section_name, start_idx) in enumerate(section_starts):
         end_idx = section_starts[i + 1][1] if i + 1 < len(section_starts) else len(paragraphs)
@@ -137,11 +163,19 @@ def _build_section_map(paragraphs: list[dict]) -> dict[str, Any]:
         ]
         # Skip the heading line itself (first paragraph)
         content_paras = section_paras[1:] if section_paras else []
-        sections[section_name] = {
-            "raw_text":     "\n".join(p["text"] for p in content_paras),
-            "para_indices": [p["index"] for p in content_paras],
-            "heading_index": start_idx,
-        }
+        new_text     = "\n".join(p["text"] for p in content_paras)
+        new_indices  = [p["index"] for p in content_paras]
+
+        if section_name in sections:
+            # Merge into existing entry
+            sections[section_name]["raw_text"]     += "\n" + new_text
+            sections[section_name]["para_indices"] += new_indices
+        else:
+            sections[section_name] = {
+                "raw_text":     new_text,
+                "para_indices": new_indices,
+                "heading_index": start_idx,
+            }
 
     # ── Fallback: capture pre-section text as "summary" ──────────────────────
     # Many Canadian resumes have an unlabelled profile blurb at the top
