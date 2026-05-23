@@ -3,11 +3,11 @@ import { useState } from "react";
 import { createAdaptation, type Adaptation } from "@/lib/api";
 
 const LLM_OPTIONS = [
-  { provider: "groq",      model: "llama-3.3-70b-versatile", label: "Llama 3.3 70B · Groq", tag: "gratis" },
-  { provider: "gemini",    model: "gemini-2.0-flash",   label: "Gemini 2.0 Flash · Google", tag: "gratis" },
-  { provider: "anthropic", model: "claude-haiku-4-5",   label: "Claude Haiku · Anthropic", tag: "" },
-  { provider: "openai",    model: "gpt-4o-mini",        label: "GPT-4o Mini · OpenAI",  tag: "créditos" },
-  { provider: "openai",    model: "gpt-4o",             label: "GPT-4o · OpenAI",       tag: "créditos" },
+  { provider: "anthropic", model: "claude-haiku-4-5",        label: "Claude Haiku · Anthropic", tag: "" },
+  { provider: "groq",      model: "llama-3.3-70b-versatile", label: "Llama 3.3 70B · Groq",     tag: "gratis" },
+  { provider: "gemini",    model: "gemini-2.0-flash",        label: "Gemini 2.0 Flash · Google", tag: "gratis" },
+  { provider: "openai",    model: "gpt-4o-mini",             label: "GPT-4o Mini · OpenAI",      tag: "créditos" },
+  { provider: "openai",    model: "gpt-4o",                  label: "GPT-4o · OpenAI",           tag: "créditos" },
 ];
 
 interface Props {
